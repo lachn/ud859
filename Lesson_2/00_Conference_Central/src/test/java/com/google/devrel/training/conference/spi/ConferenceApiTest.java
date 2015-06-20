@@ -70,14 +70,14 @@ public class ConferenceApiTest {
 
     @Test(expected = UnauthorizedException.class)
     public void testGetProfileWithoutUser() throws Exception {
-        conferenceApi.getProfile(null);
+        conferenceApi.getProfileLoggedOn(null);
     }
 
     @Test
     public void testGetProfileFirstTime() throws Exception {
         Profile profile = ofy().load().key(Key.create(Profile.class, user.getUserId())).now();
         assertNull(profile);
-        profile = conferenceApi.getProfile(user);
+        profile = conferenceApi.getProfileLoggedOn(user);
         assertNull(profile);
     }
 
@@ -121,7 +121,7 @@ public class ConferenceApiTest {
     public void testGetProfile() throws Exception {
         conferenceApi.saveProfile(user, new ProfileForm(DISPLAY_NAME, TEE_SHIRT_SIZE));
         // Fetch the Profile via the API.
-        Profile profile = conferenceApi.getProfile(user);
+        Profile profile = conferenceApi.getProfileLoggedOn(user);
         assertEquals(USER_ID, profile.getUserId());
         assertEquals(EMAIL, profile.getMainEmail());
         assertEquals(TEE_SHIRT_SIZE, profile.getTeeShirtSize());
