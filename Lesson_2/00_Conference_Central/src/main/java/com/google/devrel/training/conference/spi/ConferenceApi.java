@@ -3,6 +3,7 @@ package com.google.devrel.training.conference.spi;
 import static com.google.devrel.training.conference.service.OfyService.ofy;
 import static com.google.devrel.training.conference.service.OfyService.factory;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import com.google.api.server.spi.config.Api;
@@ -15,6 +16,7 @@ import com.google.devrel.training.conference.Constants;
 import com.google.devrel.training.conference.domain.Conference;
 import com.google.devrel.training.conference.domain.Profile;
 import com.google.devrel.training.conference.form.ConferenceForm;
+import com.google.devrel.training.conference.form.ConferenceQueryForm;
 import com.google.devrel.training.conference.form.ProfileForm;
 import com.google.devrel.training.conference.form.ProfileForm.TeeShirtSize;
 import com.googlecode.objectify.Key;
@@ -23,43 +25,45 @@ import com.googlecode.objectify.cmd.Query;
 /**
  * Defines conference APIs.
  */
-@Api(name = "conference", version = "v1", scopes = { Constants.EMAIL_SCOPE }, clientIds = {
-		Constants.WEB_CLIENT_ID, Constants.API_EXPLORER_CLIENT_ID }, description = "API for the Conference Central Backend application.")
+@Api(name = "conference", version = "v1", scopes = { Constants.EMAIL_SCOPE }, clientIds = { Constants.WEB_CLIENT_ID, Constants.API_EXPLORER_CLIENT_ID }, description = "API for the Conference Central Backend application.")
 public class ConferenceApi {
 
-	@ApiMethod(
-            name = "getConferencesCreated",
-            path = "getConferencesCreated",
-            httpMethod = HttpMethod.POST
-    )
-    public List<Conference> getConferencesCreated(User user) throws UnauthorizedException {
+	@ApiMethod(name = "getConferencesCreated", path = "getConferencesCreated", httpMethod = HttpMethod.POST)
+	public List<Conference> getConferencesCreated(User user) throws UnauthorizedException {
 		Key<Profile> profileKey = getProfileKeyLoggedOn(user);
-        Query<Conference> query = ofy().load().type(Conference.class).ancestor(profileKey).order("name");
-        return query.list();
-    }
+		Query<Conference> query = ofy().load().type(Conference.class).ancestor(profileKey).order("name");
+		return query.list();
+	}
 
-	@ApiMethod(
-            name = "queryConferences",
-            path = "queryConferences",
-            httpMethod = HttpMethod.POST
-    )
-    public List<Conference> queryConferences() {
-        Query<Conference> query = ofy().load().type(Conference.class).order("name");
-        return query.list();
-    }
-	
-    public List<Conference> filterPlayground() {
-        Query<Conference> query = ofy().load().type(Conference.class);
-        query = query.filter("city =", "Tokyo");
-        query = query.filter("seatsAvailable >=", "1");
-        query = query.filter("seatsAvailable <=", "9");
-        query = query.order("seatsAvailable");
-        query = query.order("name");
-        query = query.order("month");
-        return query.list();
-    }
-    
-    /**
+	@ApiMethod(name = "queryConferences", path = "queryConferences", httpMethod = HttpMethod.POST)
+	public List<Conference> queryConferences(ConferenceQueryForm conferenceQueryForm) {
+		Iterable<Conference> conferenceIterable = conferenceQueryForm.getQuery();
+		List<Conference> result = new ArrayList<>(0);
+		List<Key<Profile>> organizersKeyList = new ArrayList<>(0);
+
+		for (Conference conference : conferenceIterable) {
+			organizersKeyList.add(Key.create(Profile.class, conference.getOrganizerUserId()));
+			result.add(conference);
+		}
+
+		// To avoid separate datastore gets for each Conference, pre-fetch the
+		// Profiles.
+		ofy().load().keys(organizersKeyList);
+		return result;
+	}
+
+	public List<Conference> filterPlayground() {
+		Query<Conference> query = ofy().load().type(Conference.class);
+		query = query.filter("city =", "Tokyo");
+		query = query.filter("seatsAvailable >=", "1");
+		query = query.filter("seatsAvailable <=", "9");
+		query = query.order("seatsAvailable");
+		query = query.order("name");
+		query = query.order("month");
+		return query.list();
+	}
+
+	/**
 	 * Gets the Profile entity for the current user or creates it if it doesn't
 	 * exist
 	 * 
@@ -68,19 +72,16 @@ public class ConferenceApi {
 	 */
 	private static Profile getProfileFromUser(User user) {
 		// First fetch the user's Profile from the datastore.
-		Profile profile = ofy().load()
-				.key(Key.create(Profile.class, user.getUserId())).now();
+		Profile profile = ofy().load().key(Key.create(Profile.class, user.getUserId())).now();
 		if (profile == null) {
 			// Create a new Profile if it doesn't exist.
 			// Use default displayName and teeShirtSize
 			String email = user.getEmail();
-			profile = new Profile(user.getUserId(),
-					extractDefaultDisplayNameFromEmail(email), email,
-					TeeShirtSize.NOT_SPECIFIED);
+			profile = new Profile(user.getUserId(), extractDefaultDisplayNameFromEmail(email), email, TeeShirtSize.NOT_SPECIFIED);
 		}
 		return profile;
 	}
-	
+
 	private Key<Profile> createProfileKey(User user) {
 		return Key.create(Profile.class, user.getUserId());
 	}
@@ -98,45 +99,43 @@ public class ConferenceApi {
 	 *             when the user is not signed in.
 	 */
 	@ApiMethod(name = "createConference", path = "conference", httpMethod = HttpMethod.POST)
-    public Conference createConference(final User user, final ConferenceForm conferenceForm)
-        throws UnauthorizedException {
-        if (user == null) {
-            throw new UnauthorizedException("Authorization required");
-        }
+	public Conference createConference(final User user, final ConferenceForm conferenceForm) throws UnauthorizedException {
+		if (user == null) {
+			throw new UnauthorizedException("Authorization required");
+		}
 
-        // TODO (Lesson 4)
-        // Get the userId of the logged in User
-        String userId = user.getUserId();
+		// TODO (Lesson 4)
+		// Get the userId of the logged in User
+		String userId = user.getUserId();
 
-        // TODO (Lesson 4)
-        // Get the existing Profile entity for the current user if there is one
-        // Otherwise create a new Profile entity with default values
-        Profile profile = getProfileFromUser(user);
-        // TODO (Lesson 4)
-        // Get the key for the User's Profile
-        Key<Profile> profileKey = createProfileKey(user); 
+		// TODO (Lesson 4)
+		// Get the existing Profile entity for the current user if there is one
+		// Otherwise create a new Profile entity with default values
+		Profile profile = getProfileFromUser(user);
+		// TODO (Lesson 4)
+		// Get the key for the User's Profile
+		Key<Profile> profileKey = createProfileKey(user);
 
-        // TODO (Lesson 4)
-        // Allocate a key for the conference -- let App Engine allocate the ID
-        // Don't forget to include the parent Profile in the allocated ID
-        final Key<Conference> conferenceKey = factory().allocateId(profileKey, Conference.class);
+		// TODO (Lesson 4)
+		// Allocate a key for the conference -- let App Engine allocate the ID
+		// Don't forget to include the parent Profile in the allocated ID
+		final Key<Conference> conferenceKey = factory().allocateId(profileKey, Conference.class);
 
-        // TODO (Lesson 4)
-        // Get the Conference Id from the Key
-        final long conferenceId = conferenceKey.getId();
+		// TODO (Lesson 4)
+		// Get the Conference Id from the Key
+		final long conferenceId = conferenceKey.getId();
 
+		// TODO (Lesson 4)
+		// Create a new Conference Entity, specifying the user's Profile entity
+		// as the parent of the conference
+		Conference conference = new Conference(conferenceId, userId, conferenceForm);
 
-        // TODO (Lesson 4)
-        // Create a new Conference Entity, specifying the user's Profile entity
-        // as the parent of the conference
-        Conference conference = new Conference(conferenceId, userId, conferenceForm);
+		// TODO (Lesson 4)
+		// Save Conference and Profile Entities
+		ofy().save().entities(profile, conference);
 
-        // TODO (Lesson 4)
-        // Save Conference and Profile Entities
-         ofy().save().entities(profile, conference);
-
-         return conference;
-    }
+		return conference;
+	}
 
 	/*
 	 * Get the display name from the user's email. For example, if the email is
@@ -165,8 +164,7 @@ public class ConferenceApi {
 	// conforms to the fields defined in ProfileForm
 	// TODO 1 Pass the ProfileForm parameter
 	// TODO 2 Pass the User parameter
-	public Profile saveProfile(final User user, ProfileForm profileForm)
-			throws UnauthorizedException {
+	public Profile saveProfile(final User user, ProfileForm profileForm) throws UnauthorizedException {
 
 		if (user == null) {
 			throw new UnauthorizedException("Authorization required");
@@ -176,20 +174,17 @@ public class ConferenceApi {
 		String displayName = profileForm.getDisplayName();
 		TeeShirtSize teeShirtSize = profileForm.getTeeShirtSize();
 
-		Profile profile = ofy().load().key(Key.create(Profile.class, userId))
-				.now();
+		Profile profile = ofy().load().key(Key.create(Profile.class, userId)).now();
 		if (profile == null) {
 			// Populate displayName and teeShirtSize with the default values if
 			// null.
 			if (displayName == null) {
-				displayName = extractDefaultDisplayNameFromEmail(user
-						.getEmail());
+				displayName = extractDefaultDisplayNameFromEmail(user.getEmail());
 			}
 			if (teeShirtSize == null) {
 				teeShirtSize = TeeShirtSize.NOT_SPECIFIED;
 			}
-			profile = new Profile(userId, displayName, user.getEmail(),
-					teeShirtSize);
+			profile = new Profile(userId, displayName, user.getEmail(), teeShirtSize);
 		} else {
 			profile.update(displayName, teeShirtSize);
 		}
@@ -213,14 +208,14 @@ public class ConferenceApi {
 		Profile profile = ofy().load().key(key).now();
 		return profile;
 	}
-	
+
 	private Key<Profile> getProfileKeyLoggedOn(final User user) throws UnauthorizedException {
 		if (user == null) {
 			throw new UnauthorizedException("Authorization required");
 		}
 
-		String userId = user.getUserId(); 
-		Key<Profile> key = Key.create(Profile.class, userId); 
+		String userId = user.getUserId();
+		Key<Profile> key = Key.create(Profile.class, userId);
 		return key;
 	}
 }
