@@ -154,7 +154,7 @@ public class ConferenceApi {
 				
 				Queue queue = QueueFactory.getQueue("emailQueue");
 				
-				queue.add(TaskOptions.Builder.withUrl("/crons/SendConfirmationEmailServlet")
+				queue.add(ofy().getTransaction(), TaskOptions.Builder.withUrl("/crons/SendConfirmationEmailServlet")
 						.param("email", profile.getMainEmail())
 						.param("conferenceInfo", conference.toString()));
 		
